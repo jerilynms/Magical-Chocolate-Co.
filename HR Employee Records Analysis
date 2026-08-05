@@ -1,0 +1,148 @@
+## HR Employee Records SQLite Analysis
+
+### Query 1
+-- A report on how many employees in each position, the corresponding department, and the salary range
+-- Every department pays an approximate salary range of $45k-$75k, except Account Managers in the Sales department make $80k-$120k.
+SELECT Department, JobTitle, COUNT(*) AS Number_of_Employees, MIN(Salary) AS Lowest_Salary, MAX(Salary) AS Highest_Salary
+FROM EMPLOYEES
+GROUP BY Department, JobTitle
+ORDER BY Department;
+
+-- There's an error with how the Salary column is ordering numbers for Account Managers so the minimum and maximum salary in the query above is
+-- returning an incorrect and backwards range. First I tried trimming any white spaces which didn't work so then I used SQLite's interface to 
+-- update the data type to integer, which still didn't resolve the issue. Finally I copied the data to a new column with an established type of integer, 
+-- deleted the orignal column and renamed the new column to the original title. This seems to have finally resolved the ordering issue. 
+SELECT * FROM EMPLOYEES WHERE JobTitle = 'Account Manager';
+
+UPDATE EMPLOYEES SET Salary = TRIM(Salary);
+
+ALTER TABLE EMPLOYEES ADD COLUMN Salary_ INTEGER;
+
+UPDATE EMPLOYEES SET Salary_ = CAST(Salary AS INTEGER);
+
+ALTER TABLE EMPLOYEES DROP COLUMN Salary;
+
+ALTER TABLE EMPLOYEES RENAME COLUMN Salary_ TO Salary;
+
+### Query 2
+-- How much did each department spend on salaries last year(2025), accounting for new hires and terminations?
+-- Following on with the Sales department having the highest paid employees, they also spent the most on salaries in 2025, 
+-- far above the other departments at $11.3M. The IT Support staff are second, having spent $8.9M and the Quality Control
+-- department spent the least at $7.3M. 
+WITH DAYS_WORKED AS (
+SELECT Department, EmployeeID, Salary, HireDate, TerminationDate,
+CASE
+    WHEN TerminationDate = '' AND HireDate < '2025-01-01' THEN JULIANDAY('2025-12-31')-JULIANDAY('2024-12-31')
+    WHEN TerminationDate = '' AND HireDate >= '2025-01-01' THEN JULIANDAY('2026-01-01')-JULIANDAY(HireDate)
+    WHEN TerminationDate <> '' AND HireDate < '2025-01-01' THEN JULIANDAY(TerminationDate)-JULIANDAY('2024-12-31')
+    WHEN TerminationDate <> '' AND HireDate >= '2025-01-01' THEN JULIANDAY(TerminationDate)-JULIANDAY(HireDate)
+END AS DAYS
+FROM EMPLOYEES
+WHERE HireDate < '2026-01-01'
+AND (TerminationDate = '' OR (TerminationDate BETWEEN '2025-01-01' AND '2025-12-31'))
+)
+
+SELECT Department, ROUND(SUM(Salary*(Days/365)),2) AS Total_Salary_Expend
+FROM DAYS_WORKED
+GROUP BY Department
+ORDER BY ROUND(SUM(Salary*(Days/365)),2) DESC;
+
+### Query 3
+-- What is the average perfomance rating for each department and position? 
+-- Sales Associates have an average rating of 3.36 as the highest performing position, with the Accountants having the lowest average of 2.95
+SELECT Department, JobTitle, ROUND(AVG(PerformanceRating),2) as AveragePerformanceRating
+FROM EMPLOYEES
+GROUP BY Department, JobTitle
+ORDER BY AVG(PerformanceRating) DESC;
+
+### Query 4
+-- Which department has the highest number of top performing employees?
+-- Human Resources has 48 employees with a performance rating of 5
+SELECT Department, COUNT(*) AS Number_of_Employees
+FROM EMPLOYEES
+WHERE PerformanceRating = '5'
+AND TerminationDate = ''
+GROUP BY Department
+ORDER BY COUNT(*) desc
+LIMIT 1;
+
+### Query 5
+-- How many people are terminated in less than 3 years, less than 2 years, less than 1 year, and less than 6 months of being hired?
+-- The below query removes overlap between the timeframes. Employees are slightly more likely to be terminated in the first 6 months
+-- of employment than the second 6 months. However, overall the number of employees that leave the company does not seem to drastically 
+-- vary based on their length of employment from year to year.     
+WITH TermLength AS (
+SELECT EmployeeID, JULIANDAY(TerminationDate)-JULIANDAY(HireDate) AS Days
+FROM EMPLOYEES 
+WHERE Status = 'Terminated'
+), 
+Category AS (
+SELECT CASE
+WHEN Days BETWEEN (24*30.4167) AND (36*30.4167) THEN 'LessThanThreeYears'
+WHEN Days BETWEEN (12*30.4167) AND (24*30.4167) THEN 'LessThanTwoYears'
+WHEN Days BETWEEN (6*30.4167) AND (12*30.4167) THEN 'LessThanOneYear'
+ELSE 'LessThanSixMonths'
+END AS TerminationCategory
+FROM TermLength
+WHERE Days <= 36*30.4167
+)
+SELECT TerminationCategory, COUNT(*) as NumberOfEmployees
+FROM Category
+GROUP BY TerminationCategory;
+
+### Query 6
+-- For each year for 2022-2025, track the movement of staffing numbers, the growth rate, and the attrition rate
+-- The compnay more than doubled in staff in 2023 but this year also had the highest rate of terminations. 
+-- For 2024 and 2025, the growth of the company staff cooled significantly to 33.5%, but also saw a decrease in the attrition rate. 
+WITH Y2022 AS (
+SELECT 2022 AS Year, 
+0 AS StartTotal,
+(SELECT COUNT(*) FROM EMPLOYEES WHERE strftime('%Y', HireDate) = '2022') AS NewHires,
+(SELECT COUNT(*) FROM EMPLOYEES WHERE strftime('%Y', TerminationDate) = '2022') AS Terminations,
+(0+(SELECT COUNT(*) FROM EMPLOYEES WHERE strftime('%Y', HireDate) = '2022')-(SELECT COUNT(*) FROM EMPLOYEES WHERE strftime('%Y', TerminationDate) = '2022')) AS EndTotal
+FROM Employees
+GROUP BY Year
+),
+Y2023 AS (
+SELECT 2023 AS Year, 
+(SELECT EndTotal FROM Y2022) AS StartTotal,
+(SELECT COUNT(*) FROM EMPLOYEES WHERE strftime('%Y', HireDate) = '2023') AS NewHires,
+(SELECT COUNT(*) FROM EMPLOYEES WHERE strftime('%Y', TerminationDate) = '2023') AS Terminations,
+((SELECT EndTotal FROM Y2022)+(SELECT COUNT(*) FROM EMPLOYEES WHERE strftime('%Y', HireDate) = '2023')-(SELECT COUNT(*) FROM EMPLOYEES WHERE strftime('%Y', TerminationDate) = '2023')) AS EndTotal
+FROM Employees
+GROUP BY Year
+),
+Y2024 AS (
+SELECT 2024 AS Year, 
+(SELECT EndTotal FROM Y2023) AS StartTotal,
+(SELECT COUNT(*) FROM EMPLOYEES WHERE strftime('%Y', HireDate) = '2024') AS NewHires,
+(SELECT COUNT(*) FROM EMPLOYEES WHERE strftime('%Y', TerminationDate) = '2024') AS Terminations,
+((SELECT EndTotal FROM Y2023)+(SELECT COUNT(*) FROM EMPLOYEES WHERE strftime('%Y', HireDate) = '2024')-(SELECT COUNT(*) FROM EMPLOYEES WHERE strftime('%Y', TerminationDate) = '2024')) AS EndTotal
+FROM Employees
+GROUP BY Year
+),
+Y2025 AS (
+SELECT 2025 AS Year, 
+(SELECT EndTotal FROM Y2024) AS StartTotal,
+(SELECT COUNT(*) FROM EMPLOYEES WHERE strftime('%Y', HireDate) = '2025') AS NewHires,
+(SELECT COUNT(*) FROM EMPLOYEES WHERE strftime('%Y', TerminationDate) = '2025') AS Terminations,
+((SELECT EndTotal FROM Y2024)+(SELECT COUNT(*) FROM EMPLOYEES WHERE strftime('%Y', HireDate) = '2025')-(SELECT COUNT(*) FROM EMPLOYEES WHERE strftime('%Y', TerminationDate) = '2025')) AS EndTotal
+FROM Employees
+GROUP BY Year
+),
+TotalStats AS (
+SELECT * FROM Y2022
+UNION
+SELECT * FROM Y2023
+UNION
+SELECT * FROM Y2024
+UNION
+SELECT * FROM y2025
+)
+
+SELECT *, 
+CASE WHEN StartTotal = 0 THEN 100
+ELSE ROUND((100*((EndTotal - StartTotal)/(StartTotal*1.0))),2)
+END AS GrowthRate,
+IIF(StartTotal = 0,ROUND((100*(Terminations/(EndTotal*1.0))),2),ROUND((100*(Terminations/((EndTotal+StartTotal)/2.0))),2)) AS AttritionRate
+FROM TotalStats;
