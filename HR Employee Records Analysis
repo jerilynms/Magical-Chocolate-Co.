@@ -1,6 +1,19 @@
-##HR Employee Records SQLite Analysis
+# HR Employee Records Analysis accomplished via SQLite 
 
-### Query 1
+Queries 1 and 2 report on the salary ranges of each department and the total spent in 2025 on salaries. The Sales Department has the highest paid positions
+and consequently spent the most in 2025. 
+
+Queries 3 and 4 investigate performance ratings. Sales Associates have the highest average performance score but the HR Department has the most number
+of top performing employees. 
+
+Queries 5 and 6 look at the movement of employees in and out of the company. Based on the number of terminations within the first three years of employment, 
+this company seems to retain it's employees at a similar rate, no matter how long they have worked for the company. When analyzing totals for the years 
+2022-2025, using 2022 as a base year, 2023 had the most amount of growth in total number of employees but also the highest rate of terminations. 
+In 2023 and 2024, the growth rate and termination rate both slow down.
+
+Please see below for the queries and more details. 
+
+-- Query 1
 -- A report on how many employees in each position, the corresponding department, and the salary range
 -- Every department pays an approximate salary range of $45k-$75k, except Account Managers in the Sales department make $80k-$120k.
 SELECT Department, JobTitle, COUNT(*) AS Number_of_Employees, MIN(Salary) AS Lowest_Salary, MAX(Salary) AS Highest_Salary
@@ -24,7 +37,7 @@ ALTER TABLE EMPLOYEES DROP COLUMN Salary;
 
 ALTER TABLE EMPLOYEES RENAME COLUMN Salary_ TO Salary;
 
-### Query 2
+-- Query 2
 -- How much did each department spend on salaries last year(2025), accounting for new hires and terminations?
 -- Following on with the Sales department having the highest paid employees, they also spent the most on salaries in 2025, 
 -- far above the other departments at $11.3M. The IT Support staff are second, having spent $8.9M and the Quality Control
@@ -47,7 +60,7 @@ FROM DAYS_WORKED
 GROUP BY Department
 ORDER BY ROUND(SUM(Salary*(Days/365)),2) DESC;
 
-### Query 3
+-- Query 3
 -- What is the average perfomance rating for each department and position? 
 -- Sales Associates have an average rating of 3.36 as the highest performing position, with the Accountants having the lowest average of 2.95
 SELECT Department, JobTitle, ROUND(AVG(PerformanceRating),2) as AveragePerformanceRating
@@ -55,7 +68,7 @@ FROM EMPLOYEES
 GROUP BY Department, JobTitle
 ORDER BY AVG(PerformanceRating) DESC;
 
-### Query 4
+-- Query 4
 -- Which department has the highest number of top performing employees?
 -- Human Resources has 48 employees with a performance rating of 5
 SELECT Department, COUNT(*) AS Number_of_Employees
@@ -66,7 +79,7 @@ GROUP BY Department
 ORDER BY COUNT(*) desc
 LIMIT 1;
 
-### Query 5
+-- Query 5
 -- How many people are terminated in less than 3 years, less than 2 years, less than 1 year, and less than 6 months of being hired?
 -- The below query removes overlap between the timeframes. Employees are slightly more likely to be terminated in the first 6 months
 -- of employment than the second 6 months. However, overall the number of employees that leave the company does not seem to drastically 
@@ -90,7 +103,7 @@ SELECT TerminationCategory, COUNT(*) as NumberOfEmployees
 FROM Category
 GROUP BY TerminationCategory;
 
-### Query 6
+-- Query 6
 -- For each year for 2022-2025, track the movement of staffing numbers, the growth rate, and the attrition rate
 -- The compnay more than doubled in staff in 2023 but this year also had the highest rate of terminations. 
 -- For 2024 and 2025, the growth of the company staff cooled significantly to 33.5%, but also saw a decrease in the attrition rate. 
