@@ -3,10 +3,15 @@
 This project uses business data from a generator for the fictional company Magical Chocolate Co.:
 https://excelx.com/practice-data/generators/business-data/
 
-The generator has various options for choosing clean vs messy data and some data has the option of being random or having built in trends. With the exception of the data cleaning exercise, I downloaded clean data with 2000 rows and dated between 1/1/2022 and 7/17/2026. 
+This repository contains a data cleaning exercise, an analysis on HR Employee Records, a Finance & Accounting Power BI Dashboard, and a Retail Sales & Product Reviews Power BI Dashboard. Please see below for more details and reach out if you have any questions. 
+
+The generator has various options for choosing clean vs messy data and select data has the option of being random or having built in trends. With the exception of the data cleaning exercise, I downloaded clean data with 2000 rows and dated between 1/1/2022 and 7/17/2026. Retail Sales data was downloaded with seasonal trends. 
 
 ### Data Cleaning
 As a cleaning exercise, I downloaded the Detailed Expense Ledger with 2000 rows and 15% errors. First I cleaned the data manually in Excel and then I replicated the cleaning in SQL. When dealing with duplicate rows and missing data, I prioritized retaining rows that had an expenditure amount and at least one other piece of information, so that if you were to analyze the data, you would still have the amount of the expenditures for that variable, even if it was missing other data. My cleaning methodology is described in the Excel file and the SQL query file is attached separately. The two results are not exact matches but they're reasonably close. The Excel-cleaned data has 1610 rows while the SQL-cleaned data has 1614 rows. It was more difficult in SQL than Excel to tackle the challenge of choosing which duplicate to preserve; however, with a larger dataset, the SQL queries would be the most efficient. 
+
+### HR Employee Records Analysis
+The SQLite code queries the company’s HR Employee Records for reports on employee salaries, performance scores, and employment growth rates and attrition rates. Please see the Analysis file for more details, as well as the corresponding Excel file with the query results for easy viewing. 
 
 ### Finance & Accounting Dashboard
 This dashboard has three pages based on the Detailed Expense Ledger and Accounts Receivable Aging Report. The summary page has calculated historical averages and projected measures for revenue, expenses, and profit. The column chart visualizes those three figures for the last five years. We can see that 2023 had the highest revenue and profit year. There is also a pie chart that visualizes how much revenue is sitting in unpaid customer invoices, which can be filtered by year. Lastly, there are navigation buttons to take you to the other two pages of the dashboard. 
