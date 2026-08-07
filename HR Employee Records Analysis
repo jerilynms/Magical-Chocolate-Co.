@@ -1,4 +1,4 @@
-# HR Employee Records Analysis accomplished via SQLite 
+# HR Employee Records Analysis
 
 Queries 1 and 2 report on the salary ranges of each department and the total spent in 2025 on salaries. The Sales Department has the highest paid positions
 and consequently spent the most in 2025. 
