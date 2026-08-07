@@ -1,4 +1,4 @@
-# HR Employee Records Analysis
+/* # HR Employee Records Analysis
 
 Queries 1 and 2 report on the salary ranges of each department and the total spent in 2025 on salaries. The Sales Department has the highest paid positions
 and consequently spent the most in 2025. 
@@ -12,6 +12,7 @@ this company seems to retain it's employees at a similar rate, no matter how lon
 In 2023 and 2024, the growth rate and termination rate both slow down.
 
 Please see below for the queries and more details. 
+*/
 
 -- Query 1
 -- A report on how many employees in each position, the corresponding department, and the salary range
