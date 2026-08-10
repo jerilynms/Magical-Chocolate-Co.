@@ -1,0 +1,299 @@
+# Manufacturing & Supply Chain Analysis
+
+/*
+Queries 1 through 8 look at the relational database of Production Orders and Quality Control Tests. First I queried how many batches were failing 
+quality control (QC) tests based on the status of the production orders. The results showed that scheduled orders were failing QC tests which did not make sense
+if the product batch did not exist yet. I found that there were many tests dated before the scheduled date of the work order. It must be an error
+from how the data was generated, which I accounted for in subsequent queries. Unfortunately there are several completed batches that have failed QC tests, 
+as well as batches in progress and on hold. I ran a report of how many units of product from compeleted production orders have failed QC tests and which type
+of test. I then wanted to see if any product batches had failed multiple tests, but each failed batch had only failed one type of QC test. I then queried the 
+proportion of test types from the failed tests. The purity QC test is the most failed test. Lastly, I looked at the rate of each product to fail a QC test. 
+The highest rate was 8%. I also looked at which test the top two products failed at, which was taste and purity.  
+
+Queries 9 and 10 run reports from the Raw Materials Inventory on if any materials need to be reordered and which supplier is the least expensive on average. 
+As of July 17, 2026, none of the supplies need to be reordered. The supplier that is majority cheapest is S01. 
+
+Queries 11 through 17 investigate questions about product shipments. ChocoExpress is the cheapest carrier the company uses; however, they are also responsible 
+for the most amount of delayed shipments, especially on the routes to Berlin, the destination with a high number of delays in comparison to other locations.
+The company should consider not using ChocoExpress when shipping to Berlin, so that they may lower the overall average amount of delayed packages.
+Additionally, I produced a report on how long shipments take for each route, from 4.4 to 11.3 days on average. 
+
+Please see below for the queries and more details 
+*/
+
+
+/* Query 1
+How many batches failed their quality control test, by status of production?
+There are 32 scheduled batches that failed, which doesn't make sense if they haven't started production yet. 
+May need to account for tests that were performed before scheduled date as errors 
+*/
+SELECT PO.Status, COUNT(DISTINCT PO.BatchNumber) AS NumberOfBatches
+FROM ProductOrders PO
+JOIN QCTests QC
+ON PO.BatchNumber = QC.BatchNumber
+WHERE QC.Result = 'Fail'
+GROUP BY PO.Status;
+
+/* Query 2
+Are there many QC tests in the data that were marked as performed before the scheduled date of the production order? 
+Yes, there are approximately 170-200 tests from each stage of production. I will account for this error, as well as excluding 
+scheduled Batch Numbers in general, as it doesn't make sense that a QC test was performed on a non-existent batch of products.  
+*/
+SELECT PO.Status, COUNT(DISTINCT PO.BatchNumber) AS NumberOfBatches
+FROM ProductOrders PO
+JOIN QCTests QC
+ON PO.BatchNumber = QC.Batchnumber
+WHERE TestDate < ScheduledDate
+GROUP BY PO.Status;
+
+/* Query 3
+Repeating the orginal query with errors accounted for
+14 completed batches failed, 10 batches in progress, and 13 batches on hold. 
+*/
+SELECT PO.Status, COUNT(DISTINCT PO.BatchNumber) AS NumberOfBatches
+FROM ProductOrders PO
+JOIN QCTests QC
+ON PO.BatchNumber = QC.BatchNumber
+WHERE QC.Result = 'Fail' 
+AND PO.Status <> 'Scheduled'
+AND TestDate >= ScheduledDate
+GROUP BY PO.Status;
+
+/* Query 4
+For completed production orders that have failed their QC tests, how much product is being wasted? 
+Products P102 and C303 have the largest number of units, 3000 and 2500 respectively, failing the texture test. 
+*/
+SELECT QC.ProductID, QC.TestType,
+SUM(PO.QuantityToProduce) AS TotalQuantity 
+FROM QCTests QC
+JOIN ProductOrders PO
+ON QC.BatchNumber = PO.BatchNumber
+WHERE Result = 'Fail'
+AND PO.Status = 'Completed'
+AND TestDate >= ScheduledDate
+GROUP BY QC.ProductID, QC.TestType
+ORDER BY QC.ProductID;
+
+/* Query 5
+Which batches failed the most tests and which tests
+It appears that each batch failed only one test each
+*/
+SELECT QC.BatchNumber, QC.ProductID, PO.QuantityToProduce, PO.Status, TestType, 
+COUNT(*) OVER (PARTITION BY QC.BatchNumber) AS NumberOfFailures
+FROM QCTests QC
+JOIN ProductOrders PO
+ON QC.BatchNumber = PO.BatchNumber
+WHERE Result = 'Fail'
+AND PO.Status <> 'Scheduled'
+AND TestDate >= ScheduledDate
+ORDER BY PO.Status;
+
+/* Query 6
+What is the proportion of failures for each type of quality control tests?
+At 6.2%, products fail the purity test more than the other three types of tests  
+*/
+WITH Failures AS (
+SELECT QC.TestType, COUNT(*) AS NumberOfFails 
+FROM QCTests QC
+JOIN ProductOrders PO
+ON QC.BatchNumber = PO.BatchNumber
+WHERE Result = 'Fail'
+AND PO.Status <> 'Scheduled'
+AND TestDate >= ScheduledDate
+GROUP BY QC.TestType
+)
+SELECT QC.TestType,
+ROUND(100*((F.NumberOfFails*1.0)/COUNT(*)),2) AS RateOfFailure
+FROM QCTests QC
+JOIN Failures F
+ON QC.TestType = F.TestType
+JOIN ProductOrders PO
+ON QC.BatchNumber = PO.BatchNumber
+WHERE PO.Status <> 'Scheduled' AND TestDate >= ScheduledDate
+GROUP BY QC.TestType
+ORDER BY ROUND(100*((F.NumberOfFails*1.0)/COUNT(*)),2) DESC;
+
+/* Query 7
+What rate does each product fail at?
+Products C303 and P202 have the highest failure rate at 8% and 7.7% respectively. 
+*/
+WITH Failures AS (
+SELECT QC.ProductId, COUNT(*) AS NumberOfFails 
+FROM QCTests QC
+JOIN ProductOrders PO
+ON QC.BatchNumber = PO.BatchNumber
+WHERE Result = 'Fail'
+AND PO.Status <> 'Scheduled'
+AND TestDate >= ScheduledDate
+GROUP BY QC.ProductID
+)
+SELECT QC.ProductID,
+ROUND(100*((F.NumberOfFails*1.0)/COUNT(*)),2) AS RateOfFailure
+FROM QCTests QC
+JOIN Failures F
+ON QC.ProductID = F.ProductID
+JOIN ProductOrders PO
+ON QC.BatchNumber = PO.BatchNumber
+WHERE PO.Status <> 'Scheduled' AND TestDate >= ScheduledDate
+GROUP BY QC.ProductID
+ORDER BY ROUND(100*((F.NumberOfFails*1.0)/COUNT(*)),2) DESC;
+
+/* Query 8
+Which type of test are those two products failing the most?
+Product C303 fails the taste test the most and product P202 fails the purity test the most 
+*/
+WITH Rankings AS (
+SELECT QC.ProductID, QC.TestType, COUNT(*) AS NumberOfFailures,
+RANK() OVER (PARTITION BY QC.ProductID ORDER BY COUNT(*) DESC) AS RANK
+FROM QCTests QC
+JOIN ProductOrders PO
+ON QC.BatchNumber = PO.BatchNumber
+WHERE QC.ProductID IN ('P202','C303')
+AND PO.Status <> 'Scheduled' AND TestDate >= ScheduledDate
+GROUP BY QC.ProductID, QC.TestType
+ORDER BY QC.ProductID, COUNT(*) DESC
+)
+SELECT ProductID, TestType, NumberOfFailures
+FROM Rankings
+WHERE RANK = 1;
+
+/* Query 9
+Do any raw material supplies need to be reordered?
+This query is written with the assumption that anything with a date older than the most recent order date is historical data 
+No, there are not any raw materials that currently need to be ordered.  
+*/
+WITH RecentOrders AS (
+SELECT *, 
+RANK() OVER (
+PARTITION BY MaterialID, SupplierID 
+ORDER BY LastOrderDate DESC
+) AS RANKS
+FROM INVENTORY
+)
+SELECT MaterialID, MaterialName, SupplierID, QuantityOnHand, Unit, UnitCost, 
+CASE WHEN ReorderPoint > QuantityOnHand THEN 'YES'
+ELSE 'NO'
+END AS Reorder
+FROM RecentOrders
+WHERE RANKS = 1;
+
+/* Query 10
+A report of the average cost of each material from each supplier, ordered from least to most expensive 
+Supplier 1 is the cheapest option for three out of the five raw materials. Supplier 2 is the least expensive for Cane Sugar
+and Supplier 3 has the cheapest Whole Milk Powder. 
+*/
+SELECT MaterialName, SupplierID, ROUND(AVG(UnitCost),2) AS AverageCost
+FROM INVENTORY
+GROUP BY MaterialName, SupplierID
+ORDER BY MaterialName, AVG(UnitCost);
+
+/* Query 11
+Which shipping carrier is the least expensive to use?
+ChocoExpress is the cheapest carrier on average 
+*/
+SELECT Carrier, ROUND(AVG(ShippingCost),2) AS AverageCost
+FROM SHIPMENTS 
+GROUP BY Carrier
+ORDER BY AVG(ShippingCost) ASC; 
+
+/* Query 12
+Does the carrier have an effect on whether a shipment will be delayed or not?
+ChocoExpress has the highest percentage of delays; however only by a modest amount. 
+I will investigate the shipment origins and destinations next 
+*/
+WITH DELAYS AS (
+SELECT Carrier, COUNT(ShipmentID) AS TotalDelays
+FROM SHIPMENTS
+WHERE Status = 'Delayed' 
+OR ActualDeliveryDate > ExpectedDeliveryDate
+GROUP BY Carrier
+)
+SELECT S.Carrier, D.TotalDelays,
+ROUND(100*((TotalDelays*1.0)/COUNT(ShipmentID)),2) AS DelayPercentage
+FROM SHIPMENTS S
+JOIN DELAYS D
+ON S.Carrier = D.Carrier
+GROUP BY S.Carrier;
+
+-- Query 13
+-- Shipments sent from Bangalore and Chicago have a delay rate of 43%
+WITH DELAYS AS (
+SELECT Origin, COUNT(ShipmentID) AS TotalDelays
+FROM SHIPMENTS
+WHERE Status = 'Delayed' 
+OR ActualDeliveryDate > ExpectedDeliveryDate
+GROUP BY Origin
+)
+SELECT S.Origin, D.TotalDelays,
+ROUND(100*((TotalDelays*1.0)/COUNT(ShipmentID)),2) AS DelayPercentage
+FROM SHIPMENTS S
+JOIN DELAYS D
+ON S.Origin = D.Origin
+GROUP BY S.Origin;
+
+-- Query 14
+-- Shipments destined for Berlin and Tokyo have a delay rate of 45% and 44% respectively 
+WITH DELAYS AS (
+SELECT Destination, COUNT(ShipmentID) AS TotalDelays
+FROM SHIPMENTS
+WHERE Status = 'Delayed' 
+OR ActualDeliveryDate > ExpectedDeliveryDate
+GROUP BY Destination
+)
+SELECT S.Destination, D.TotalDelays,
+ROUND(100*((TotalDelays*1.0)/COUNT(ShipmentID)),2) AS DelayPercentage
+FROM SHIPMENTS S
+JOIN DELAYS D
+ON S.Destination = D.Destination
+GROUP BY S.Destination;
+
+/* Query 15
+Berlin to Berlin oddly enough has the highest proportion of delays at 75%
+Buenos Aires to Toronto, Chicago to Toronto, and London to Berlin are tied for the second most proportion of delays at 67%. 
+*/
+WITH DELAYS AS (
+SELECT CONCAT(Origin,' to ', Destination) AS Path, COUNT(ShipmentID) AS TotalDelays
+FROM SHIPMENTS
+WHERE Status = 'Delayed' 
+OR ActualDeliveryDate > ExpectedDeliveryDate
+GROUP BY CONCAT(Origin,' to ', Destination)
+)
+SELECT CONCAT(S.Origin,' to ', S.Destination) AS Path, D.TotalDelays,
+ROUND(100*((TotalDelays*1.0)/COUNT(ShipmentID)),2) AS DelayPercentage
+FROM SHIPMENTS S
+JOIN DELAYS D
+ON CONCAT(S.Origin,' to ', S.Destination) = D.Path
+GROUP BY CONCAT(S.Origin,' to ', S.Destination);
+
+/* Query 16
+Since Berlin seems to be an issue, let's see if we should stop using a specific carrier when shipping to Berlin
+It seems that ChocoExpress has the highest rate of delays when shipping to Berlin
+*/
+WITH DELAYS AS (
+SELECT Carrier, COUNT(ShipmentID) AS TotalDelays
+FROM SHIPMENTS
+WHERE 
+(Status = 'Delayed' 
+OR ActualDeliveryDate > ExpectedDeliveryDate)
+AND Destination = 'Berlin'
+GROUP BY Carrier
+)
+SELECT S.Carrier, D.TotalDelays,
+ROUND(100*((TotalDelays*1.0)/COUNT(ShipmentID)),2) AS DelayPercentage
+FROM SHIPMENTS S
+JOIN DELAYS D
+ON S.Carrier = D.Carrier
+WHERE Destination = 'Berlin'
+GROUP BY S.Carrier;
+
+/* Query 17
+-How long does it take shipments to be delivered along each route?
+Toronto to Paris is the shortest route, with Paris to Buenos Aires as the longest. 
+*/
+SELECT CONCAT(Origin,' to ', Destination) AS Route,
+CASE 
+WHEN Status = 'Delivered' THEN ROUND(AVG(JULIANDAY(ActualDeliveryDate)-JULIANDAY(ShipDate)),1)
+ELSE ROUND(AVG(JULIANDAY(ExpectedDeliveryDate)-JULIANDAY(ShipDate)),1)
+END AS AverageDays
+FROM SHIPMENTS
+GROUP BY CONCAT(Origin,' to ', Destination);
